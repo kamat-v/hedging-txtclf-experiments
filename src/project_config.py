@@ -13,6 +13,4 @@ A hedged statement expresses uncertainty, conditionality, or epistemic caution a
 conditional language (if, unless, subject to), and uncertainty markers 
 (we believe, expect, think, likely), especially when the speaker is qualifying confidence rather 
 than stating a settled fact. 
-
-
 """
