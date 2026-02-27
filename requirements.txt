@@ -10,3 +10,4 @@ seaborn
 python-dotenv
 groq
 venn-abers
+ipykernel
