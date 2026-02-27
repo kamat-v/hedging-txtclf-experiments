@@ -1,0 +1,12 @@
+pandas
+numpy
+scikit-learn
+torch
+sentence-transformers
+umap-learn
+bokeh
+matplotlib
+seaborn
+python-dotenv
+groq
+venn-abers
