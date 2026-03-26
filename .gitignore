@@ -5,6 +5,7 @@ __pycache__/
 *.pyo
 data/raw/
 data/processed/
+data
 .ipynb_checkpoints/
 *.egg-info/
 dist/
