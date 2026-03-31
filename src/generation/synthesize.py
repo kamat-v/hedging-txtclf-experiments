@@ -131,7 +131,7 @@ def generate_positive_variants(
         except Exception as e:
             print(f"API error on attempt {attempt + 1}: {e}")
 
-        time.sleep(1.5)  # brief pause before retry
+        time.sleep(10)  # brief pause before retry
 
     return []  # return empty list if all retries fail
 
@@ -160,10 +160,11 @@ def run_positive_generation(
     os.makedirs("data/synthetic", exist_ok=True)
 
     positives = pd.read_parquet(positives_path)
+    if 'label' in positives.columns:
+        positives=positives[positives['label']==1].reset_index(drop=True)
     if max_seeds is not None:
-
        positives = positives.head(max_seeds)
-       print(f"Loaded {len(positives)} seed positives.")
+    print(f"Loaded {len(positives)} seed positives.")
 
     records = []
     failed = 0
@@ -194,7 +195,10 @@ def run_positive_generation(
             })
 
         # Progress update every 50 seeds
-        if (i + 1) % 50 == 0:
+        # Save checkpoint and print progress every 100 seeds
+        if (i + 1) % 100 == 0:
+            df_checkpoint = pd.DataFrame(records)
+            df_checkpoint.to_parquet(output_path.replace('.parquet', '_checkpoint.parquet'), index=False)
             print(f"Processed {i + 1}/{len(positives)} seeds | "
                   f"Generated: {len(records)} | Failed: {failed}")
 
@@ -205,6 +209,7 @@ def run_positive_generation(
 
 if __name__ == "__main__":
     run_positive_generation(
+        positives_path="data/processed/train.parquet",
         output_path="data/synthetic/positive_raw.parquet",
         max_seeds=None,
     )
