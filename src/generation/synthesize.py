@@ -26,7 +26,8 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Generation model — start with 8B for speed during prompt development
 # Switch to llama-3.3-70b-versatile for final generation pass if needed
-MODEL = "llama-3.1-8b-instant"
+#MODEL = "llama-3.1-8b-instant"
+MODEL = "llama-3.3-70b-versatile"
 # --- Persona and sector context ---
 # CEO tends to hedge on strategy and vision
 # CFO tends to hedge on financials and guidance
