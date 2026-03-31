@@ -26,8 +26,7 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Generation model — start with 8B for speed during prompt development
 # Switch to llama-3.3-70b-versatile for final generation pass if needed
-#MODEL = "llama-3.1-8b-instant"
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "llama-3.1-8b-instant"
 # --- Persona and sector context ---
 # CEO tends to hedge on strategy and vision
 # CFO tends to hedge on financials and guidance
@@ -108,12 +107,11 @@ def generate_positive_variants(
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model=MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.9,  # high temperature encourages lexical diversity
-                max_tokens=300,
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.9,
+            max_tokens=300,
             )
-
             raw = response.choices[0].message.content.strip()
 
             # Parse JSON output — model instructed to return only a JSON array
@@ -193,8 +191,6 @@ def run_positive_generation(
                 "sector": sector,
                 "persona": persona,
             })
-
-        # Progress update every 50 seeds
         # Save checkpoint and print progress every 100 seeds
         if (i + 1) % 100 == 0:
             df_checkpoint = pd.DataFrame(records)
@@ -211,5 +207,4 @@ if __name__ == "__main__":
     run_positive_generation(
         positives_path="data/processed/train.parquet",
         output_path="data/synthetic/positive_raw.parquet",
-        max_seeds=None,
     )
