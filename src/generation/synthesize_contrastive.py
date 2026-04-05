@@ -214,5 +214,5 @@ if __name__ == "__main__":
     run_contrastive_generation(
         positives_path="data/processed/train.parquet",
         output_path="data/synthetic/contrastive_raw.parquet",
-        max_seeds=5,
+        max_seeds=None,
     )
