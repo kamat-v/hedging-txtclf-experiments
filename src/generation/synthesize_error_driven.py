@@ -5,12 +5,13 @@
 # This pipeline inverts the contrastive direction: instead of generating non-hedges
 # from hedge seeds, it generates genuine hedges from false positive seeds.
 #
-# Two sampling strategies supported:
-#   Strategy A: High-confidence false positives (calibrated score >= 0.2)
-#   Strategy B: Diversity-based sample via KMeans clustering (~200 seeds)
+# Three classifier-specific seed files supported:
+#   error_seeds_lr.parquet      -> error_driven_lr_raw.parquet
+#   error_seeds_mlp1.parquet    -> error_driven_mlp1_raw.parquet
+#   error_seeds_mlp2.parquet    -> error_driven_mlp2_raw.parquet
 #
+# Resume capability: skips already-completed seeds via checkpoint file.
 # Generated variants are label=1 — genuine hedges produced from FP seeds.
-# Temperature=0.7 balances faithfulness to seed vocabulary with inter-variant diversity.
 
 import os
 import json
@@ -32,25 +33,6 @@ SECTORS = [
 ]
 
 def build_error_driven_prompt(seed_sentence: str, sector: str) -> str:
-    """
-    Builds a prompt to generate genuine hedge variants from false positive seeds.
-    
-    False positives are sentences that use hedging-like vocabulary but do NOT
-    express genuine epistemic uncertainty. This prompt asks the model to rewrite
-    them as authentic hedges — preserving topic and vocabulary but adding real
-    epistemic stance.
-    
-    Temperature=0.7 balances faithfulness to seed vocabulary with sufficient
-    diversity between the two variants. Explicit instruction to use different
-    hedging devices per variant reinforces lexical diversity.
-    
-    Args:
-        seed_sentence: A false positive from the baseline classifier
-        sector: GICS sector of source company
-    
-    Returns:
-        Prompt string
-    """
     return f"""You are correcting training data for a hedging language classifier.
 You are working with earnings call transcripts in the {sector} sector.
 
@@ -88,29 +70,12 @@ Output format:
   "hedge_variant_2": "second genuine hedge here"
 }}"""
 
+
 def generate_error_driven_variants(
     seed_sentence: str,
     sector: str,
     max_retries: int = 3,
 ) -> dict | None:
-    """
-    Calls Groq API to generate genuine hedge variants from false positive seeds.
-    
-    Args:
-        seed_sentence: A false positive from the baseline classifier
-        sector: GICS sector of source company
-        max_retries: Number of retries on API failure or malformed output
-    
-    Returns:
-        Dict with keys: false_positive, hedge_variant_1, hedge_variant_2.
-        Returns None on failure.
-    
-    Notes:
-        - Temperature=0.7 balances faithfulness with inter-variant diversity
-        - Both variants labeled 1 — genuine hedges generated from FP seeds
-        - Explicit hedging device diversity instruction in prompt reduces
-          variant similarity at this temperature
-    """
     prompt = build_error_driven_prompt(seed_sentence, sector)
 
     for attempt in range(max_retries):
@@ -123,11 +88,8 @@ def generate_error_driven_variants(
             )
 
             raw = response.choices[0].message.content.strip()
-
-            # Parse JSON output
             result = json.loads(raw)
 
-            # Validate output structure
             required_keys = {"false_positive", "hedge_variant_1", "hedge_variant_2"}
             if isinstance(result, dict) and required_keys.issubset(result.keys()):
                 if all(isinstance(result[k], str) and len(result[k]) > 20
@@ -145,40 +107,55 @@ def generate_error_driven_variants(
 
     return None
 
+
 def run_error_driven_generation(
     seeds_path: str,
     output_path: str,
-    strategy_name: str,
+    classifier_name: str,
     max_seeds: int = None,
 ) -> None:
     """
-    Full generation loop for error-driven positive augmentation.
-    Generates two genuine hedge variants per false positive seed.
-    
+    Full generation loop with resume capability.
+    Skips seeds already present in checkpoint file.
+
     Args:
-        seeds_path: Path to false positive seed parquet file
-        output_path: Where to save raw generated variants
-        strategy_name: 'strategy_a' or 'strategy_b' — for provenance metadata
-        max_seeds: If set, limits generation for dry runs
-    
-    Notes:
-        - Seeds are false positives from baseline classifier
-        - Generated variants are label=1 — genuine hedges
-        - Checkpoint saved every 50 seeds
-        - Both variants use different hedging devices by prompt instruction
+        seeds_path:       Path to seed parquet (error_seeds_lr/mlp1/mlp2.parquet)
+        output_path:      Where to save raw generated variants
+        classifier_name:  'lr', 'mlp1', or 'mlp2' — for provenance metadata
+        max_seeds:        Cap for dry runs
     """
     os.makedirs("data/synthetic", exist_ok=True)
+    checkpoint_path = output_path.replace('.parquet', '_checkpoint.parquet')
+
+    # Resume from checkpoint if it exists
+    if os.path.exists(checkpoint_path):
+        existing     = pd.read_parquet(checkpoint_path)
+        completed    = set(existing['seed_sentence'].unique())
+        records      = existing.to_dict('records')
+        print(f"Resuming from checkpoint: {len(existing)} variants already generated "
+              f"({len(completed)} seeds completed).")
+    else:
+        completed = set()
+        records   = []
+        print("No checkpoint found — starting fresh.")
 
     seeds = pd.read_parquet(seeds_path)
     if max_seeds is not None:
         seeds = seeds.head(max_seeds)
-    print(f"Loaded {len(seeds)} seeds for {strategy_name}.")
 
-    records = []
+    # Filter out already completed seeds
+    seeds_remaining = seeds[
+        ~seeds['sentence'].isin(completed)
+    ].reset_index(drop=True)
+
+    print(f"Total seeds: {len(seeds)} | "
+          f"Completed: {len(completed)} | "
+          f"Remaining: {len(seeds_remaining)}")
+
     failed = 0
 
-    for i, row in seeds.iterrows():
-        seed = row['sentence']
+    for i, row in seeds_remaining.iterrows():
+        seed   = row['sentence']
         sector = row['sector']
 
         result = generate_error_driven_variants(
@@ -192,35 +169,38 @@ def run_error_driven_generation(
 
         for variant_key in ["hedge_variant_1", "hedge_variant_2"]:
             records.append({
-                "sentence": result[variant_key],
-                "label": 1,
-                "source": f"synthetic_error_driven_{strategy_name}",
+                "sentence":      result[variant_key],
+                "label":         1,
+                "source":        f"synthetic_error_driven_{classifier_name}",
                 "seed_sentence": seed,
-                "sector": sector,
-                "variant": variant_key,
+                "sector":        sector,
+                "variant":       variant_key,
             })
 
         # Checkpoint every 50 seeds
         if (i + 1) % 50 == 0:
             df_checkpoint = pd.DataFrame(records)
-            df_checkpoint.to_parquet(
-                output_path.replace('.parquet', '_checkpoint.parquet'),
-                index=False
-            )
-            print(f"Processed {i + 1}/{len(seeds)} seeds | "
-                  f"Generated: {len(records)} | Failed: {failed}")
+            df_checkpoint.to_parquet(checkpoint_path, index=False)
+            print(f"Processed {i + 1}/{len(seeds_remaining)} remaining | "
+                  f"Generated: {len(records)} total | Failed: {failed}")
+
+        # Rate limit buffer
+        time.sleep(2)
 
     df_out = pd.DataFrame(records)
     df_out.to_parquet(output_path, index=False)
     print(f"\nDone. Generated {len(df_out)} hedge variants. Failed: {failed}")
     print(f"Saved to {output_path}")
 
-
 if __name__ == "__main__":
+    CLASSIFIER_NAME='lr' #change to mlp1 or mlp2 for subsequent runs
+
+    SEEDS_PATH   = f"data/synthetic/error_seeds_{CLASSIFIER_NAME}.parquet"
+    OUTPUT_PATH  = f"data/synthetic/error_driven_{CLASSIFIER_NAME}_raw.parquet"
     # Start with Strategy B — diversity-based sampling
     run_error_driven_generation(
-        seeds_path="data/synthetic/error_seeds_strategy_b.parquet",
-        output_path="data/synthetic/error_driven_strategy_b_raw.parquet",
-        strategy_name="strategy_b",
+        seeds_path=SEEDS_PATH,
+        output_path=OUTPUT_PATH,
+        classifier_name=CLASSIFIER_NAME,
         max_seeds=None,
     )
