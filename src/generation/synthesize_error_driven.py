@@ -193,7 +193,7 @@ def run_error_driven_generation(
     print(f"Saved to {output_path}")
 
 if __name__ == "__main__":
-    CLASSIFIER_NAME='mlp2' #change to mlp1 or mlp2 for subsequent runs
+    CLASSIFIER_NAME='mlp2' #change to lr, mlp1 or mlp2 for model-specific error generation
 
     SEEDS_PATH   = f"data/synthetic/error_seeds_{CLASSIFIER_NAME}.parquet"
     OUTPUT_PATH  = f"data/synthetic/error_driven_{CLASSIFIER_NAME}_raw.parquet"
