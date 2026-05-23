@@ -202,5 +202,5 @@ if __name__ == "__main__":
     run_hard_contrastive_70b(
         positives_path="data/processed/train.parquet",
         output_path="data/synthetic/hard_contrastive_70b_raw.parquet",
-        max_seeds=None,  # set to 5 for dry run first
+        max_seeds=None,  
     )
