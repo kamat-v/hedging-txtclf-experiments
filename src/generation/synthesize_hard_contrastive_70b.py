@@ -190,7 +190,7 @@ def run_hard_contrastive_70b(
                   f"Generated: {len(records)} total | Failed: {failed}")
 
         # Rate limit buffer — 70B uses more tokens per call
-        time.sleep(3)
+        time.sleep(10)
 
     df_out = pd.DataFrame(records)
     df_out.to_parquet(output_path, index=False)
