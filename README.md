@@ -286,19 +286,3 @@ hedging-txtclf-experiments/
   on calibration F1 (patience=5)
 - **SVM:** scikit-learn `SVC`, C sweep ∈ {0.1, 1.0, 10.0}, `gamma='scale'`
 - **Seed:** 42 throughout
-
----
-
-## Citation
-
-If you use this code or findings, please cite:
-
-```
-@misc{kamat2025hedging,
-  author = {Kamat, Vikram},
-  title  = {LLM Synthetic Data Strategies for Imbalanced Text Classification:
-             An Empirical Study},
-  note   = {Hedging Language Detection in S\&P 500 Earnings Calls},
-  year   = {2025},
-}
-```
